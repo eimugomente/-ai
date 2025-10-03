@@ -1,41 +1,324 @@
-# Compiled Lua sources
-luac.out
+-- VenomX Orion - Optimized Version
+local Orion = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
+local RS = game:GetService("ReplicatedStorage")
+local Run = game:GetService("RunService")
+local Plrs = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local Deb = game:GetService("Debris")
 
-# luarocks build files
-*.src.rock
-*.zip
-*.tar.gz
+local GE = RS:WaitForChild("GrabEvents")
+local MT = RS:WaitForChild("MenuToys")
+local CE = RS:WaitForChild("CharacterEvents")
+local SNO = GE:WaitForChild("SetNetworkOwner")
+local Str = CE:WaitForChild("Struggle")
+local DT = MT:WaitForChild("DestroyToy")
 
-# Object files
-*.o
-*.os
-*.ko
-*.obj
-*.elf
+local LP = Plrs.LocalPlayer
+local Char = LP.Character or LP.CharacterAdded:Wait()
+LP.CharacterAdded:Connect(function(c) Char = c end)
 
-# Precompiled Headers
-*.gch
-*.pch
+-- Variables
+local Coroutines = {}
+local Conns = {}
+local AncParts = {}
+local AncConns = {}
+local KickConns = {}
+local DecoyConns = {}
+local AntiExpConn, CharAddConn, StrConn
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-*.def
-*.exp
+-- Settings
+_G.strength = 400
+_G.BlobDelay = 0.005
+local CrSpd, CrJmp = 50, 50
+local DecOff, CircRad = 15, 10
+local FollowMode = true
+local ToyFolder = workspace:FindFirstChild(LP.Name.."SpawnedInToys")
+local Blobman
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+-- Utils
+local U = loadstring(game:HttpGet("https://paste.ee/r/7X7NLEPB"))()
+local function IsDes(t,o) local p=t.Parent while p do if p==o then return true end p=p.Parent end return false end
+local function GetParts(n) local t={} for _,d in ipairs(workspace.Map:GetDescendants())do if d:IsA("Part")and d.Name==n then table.insert(t,d)end end return t end
+local PoisonParts = GetParts("PoisonHurtPart")
+local RadioParts = GetParts("PaintPlayerPart")
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+local function Spawn(n,cf) task.spawn(function() RS.MenuToys.SpawnToyRemoteFunction:InvokeServer(n,cf,Vector3.new(0,0,0))end)end
+local function GetNearest() local np,nd=nil,math.huge for _,p in pairs(Plrs:GetPlayers())do if p~=LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart")then local d=(Char.HumanoidRootPart.Position-p.Character.HumanoidRootPart.Position).Magnitude if d<nd then nd=d np=p end end end return np end
+local function CleanConns(t) for _,c in ipairs(t)do if c then pcall(function()c:Disconnect()end)end end table.clear(t)end
+local function StopCo(n) if Coroutines[n]then pcall(function()coroutine.close(Coroutines[n])end)Coroutines[n]=nil end end
 
+-- Grab Handlers
+local function GrabHandle(t)
+    while true do
+        pcall(function()
+            local gp=workspace:FindFirstChild("GrabParts")
+            if gp then
+                local g=gp:FindFirstChild("GrabPart")
+                if g and g:FindFirstChild("WeldConstraint")then
+                    local p=g.WeldConstraint.Part1
+                    if p and p.Parent then
+                        local h=p.Parent:FindFirstChild("Head")
+                        if h then
+                            while workspace:FindFirstChild("GrabParts")do
+                                local pts=t=="poison"and PoisonParts or RadioParts
+                                for _,pt in pairs(pts)do pt.Size=Vector3.new(2,2,2)pt.Transparency=1 pt.Position=h.Position end
+                                wait()
+                                for _,pt in pairs(pts)do pt.Position=Vector3.new(0,-200,0)end
+                            end
+                            for _,pt in pairs(pts)do pt.Position=Vector3.new(0,-200,0)end
+                        end
+                    end
+                end
+            end
+        end)
+        wait()
+    end
+end
+
+local function FireGrab()
+    while true do
+        pcall(function()
+            local gp=workspace:FindFirstChild("GrabParts")
+            if gp then
+                local g=gp:FindFirstChild("GrabPart")
+                if g and g:FindFirstChild("WeldConstraint")then
+                    local p=g.WeldConstraint.Part1
+                    if p and p.Parent then
+                        local h=p.Parent:FindFirstChild("Head")
+                        if h then
+                            if not ToyFolder:FindFirstChild("Campfire")then Spawn("Campfire",Vector3.new(-72,-5,-265))end
+                            local cf=ToyFolder:FindFirstChild("Campfire")
+                            if cf then
+                                local fp=cf:FindFirstChild("FirePlayerPart")
+                                if fp then fp.Size=Vector3.new(7,7,7)fp.Position=h.Position wait(0.3)fp.Position=Vector3.new(0,-50,0)end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        wait()
+    end
+end
+
+local function NoclipGrab()
+    while true do
+        pcall(function()
+            local gp=workspace:FindFirstChild("GrabParts")
+            if gp then
+                local g=gp:FindFirstChild("GrabPart")
+                if g and g:FindFirstChild("WeldConstraint")then
+                    local p=g.WeldConstraint.Part1
+                    if p and p.Parent then
+                        local c=p.Parent
+                        if c:FindFirstChild("HumanoidRootPart")then
+                            while workspace:FindFirstChild("GrabParts")do
+                                for _,pt in pairs(c:GetChildren())do if pt:IsA("BasePart")then pt.CanCollide=false end end
+                                wait()
+                            end
+                            for _,pt in pairs(c:GetChildren())do if pt:IsA("BasePart")then pt.CanCollide=true end end
+                        end
+                    end
+                end
+            end
+        end)
+        wait()
+    end
+end
+
+local function KickGrab()
+    for _,p in pairs(Plrs:GetPlayers())do
+        if p.Character and p.Character:FindFirstChild("HumanoidRootPart")then
+            local h=p.Character.HumanoidRootPart
+            if h:FindFirstChild("FirePlayerPart")then local f=h.FirePlayerPart f.Size=Vector3.new(4.5,5.5,4.5)f.CollisionGroup="1"f.CanQuery=true end
+        end
+        table.insert(KickConns,p.CharacterAdded:Connect(function(c)local h=c:WaitForChild("HumanoidRootPart")local f=h:WaitForChild("FirePlayerPart")f.Size=Vector3.new(4.5,5,4.5)f.CollisionGroup="1"f.CanQuery=true end))
+    end
+    table.insert(KickConns,Plrs.PlayerAdded:Connect(function(p)table.insert(KickConns,p.CharacterAdded:Connect(function(c)local h=c:WaitForChild("HumanoidRootPart")local f=h:WaitForChild("FirePlayerPart")f.Size=Vector3.new(4.5,5,4.5)f.CollisionGroup="1"f.CanQuery=true end))end))
+end
+
+local function FireAll()
+    while true do
+        pcall(function()
+            if ToyFolder:FindFirstChild("Campfire")then DT:FireServer(ToyFolder:FindFirstChild("Campfire"))wait(0.5)end
+            Spawn("Campfire",Char.Head.CFrame)
+            local cf=ToyFolder:WaitForChild("Campfire")
+            local fp
+            for _,p in pairs(cf:GetChildren())do if p.Name=="FirePlayerPart"then p.Size=Vector3.new(10,10,10)fp=p break end end
+            SNO:FireServer(fp,fp.CFrame)
+            Char:MoveTo(fp.Position)wait(0.3)Char:MoveTo(Char.Torso.Position)
+            local bp=Instance.new("BodyPosition")bp.P=20000 bp.Position=Char.Head.Position+Vector3.new(0,600,0)bp.Parent=cf.Main
+            while true do
+                for _,p in pairs(Plrs:GetChildren())do
+                    pcall(function()bp.Position=Char.Head.Position+Vector3.new(0,600,0)if p.Character and p.Character.HumanoidRootPart and p.Character~=Char then fp.Position=p.Character.HumanoidRootPart.Position wait()end end)
+                end
+                wait()
+            end
+        end)
+        wait()
+    end
+end
+
+local function AnchorGrab()
+    while true do
+        pcall(function()
+            local gp=workspace:FindFirstChild("GrabParts")
+            if not gp then return end
+            local g=gp:FindFirstChild("GrabPart")
+            if not g then return end
+            local w=g:FindFirstChild("WeldConstraint")
+            if not w or not w.Part1 then return end
+            local pp=w.Part1
+            if not pp or pp.Anchored then return end
+            if IsDes(pp,workspace.Map)then return end
+            for _,p in pairs(Plrs:GetChildren())do if p.Character and IsDes(pp,p.Character)then return end end
+            local found=false
+            for _,v in pairs(pp:GetDescendants())do if table.find(AncParts,v)then found=true break end end
+            if not found and not table.find(AncParts,pp)then
+                local tgt=pp
+                if pp.Parent and pp.Parent:IsA("Model")and pp.Parent~=workspace then tgt=pp.Parent end
+                local hl=Instance.new("Highlight")hl.DepthMode=Enum.HighlightDepthMode.Occluded hl.FillTransparency=1 hl.OutlineColor=Color3.new(0,0,1)hl.OutlineTransparency=0.5 hl.Parent=tgt
+                table.insert(AncParts,pp)
+                table.insert(AncConns,tgt.DescendantAdded:Connect(function(d)if d.Name=="PartOwner"and d.Value~=LP.Name then if hl then hl.OutlineColor=d.Value~=LP.Name and Color3.new(1,0,0)or Color3.new(0,0,1)end end end))
+            end
+            for _,c in ipairs(pp:GetChildren())do if c:IsA("BodyPosition")or c:IsA("BodyGyro")then c:Destroy()end end
+            while workspace:FindFirstChild("GrabParts")do wait()end
+            local bp=Instance.new("BodyPosition")bp.P=15000 bp.D=200 bp.MaxForce=Vector3.new(5e6,5e6,5e6)bp.Position=pp.Position bp.Parent=pp
+            local bg=Instance.new("BodyGyro")bg.P=15000 bg.D=200 bg.MaxTorque=Vector3.new(5e6,5e6,5e6)bg.CFrame=pp.CFrame bg.Parent=pp
+        end)
+        wait()
+    end
+end
+
+local function CleanAnchored()
+    for _,p in ipairs(AncParts)do
+        if p then
+            if p:FindFirstChild("BodyPosition")then p.BodyPosition:Destroy()end
+            if p:FindFirstChild("BodyGyro")then p.BodyGyro:Destroy()end
+            local hl=p:FindFirstChild("Highlight")or(p.Parent and p.Parent:FindFirstChild("Highlight"))
+            if hl then hl:Destroy()end
+        end
+    end
+    CleanConns(AncConns)
+    table.clear(AncParts)
+end
+
+local function SetupAntiExp(c)
+    local h=c:WaitForChild("Humanoid")
+    local r=h:FindFirstChild("Ragdolled")
+    if r then
+        AntiExpConn=r:GetPropertyChangedSignal("Value"):Connect(function()
+            for _,p in ipairs(c:GetChildren())do if p:IsA("BasePart")then p.Anchored=r.Value end end
+        end)
+    end
+end
+
+local balt=1
+local function BlobGrab(p,b)
+    if balt==1 then
+        if p.Character and p.Character:FindFirstChild("HumanoidRootPart")then
+            b:WaitForChild("BlobmanSeatAndOwnerScript"):WaitForChild("CreatureGrab"):FireServer(b:FindFirstChild("LeftDetector"),p.Character.HumanoidRootPart,b.LeftDetector:FindFirstChild("LeftWeld"))
+            balt=2
+        end
+    else
+        if p.Character and p.Character:FindFirstChild("HumanoidRootPart")then
+            b:WaitForChild("BlobmanSeatAndOwnerScript"):WaitForChild("CreatureGrab"):FireServer(b:FindFirstChild("RightDetector"),p.Character.HumanoidRootPart,b.RightDetector:FindFirstChild("RightWeld"))
+            balt=1
+        end
+    end
+end
+
+-- UI
+local Win=Orion:MakeWindow({Name="VenomX Orion",HidePremium=false,SaveConfig=true,ConfigFolder="VenomXOrion",IntroEnabled=true,IntroText="VenomX Loading..."})
+
+-- Home
+local Home=Win:MakeTab({Name="Home",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Home:AddParagraph("Welcome!","VenomX Orion Edition\nPlayer: "..LP.Name)
+Home:AddButton({Name="Copy Discord",Callback=function()setclipboard("discord.gg/BKU2WH7evF")Orion:MakeNotification({Name="Copied",Content="Discord link copied",Image="rbxassetid://4483362458",Time=3})end})
+
+-- Combat
+local Cmb=Win:MakeTab({Name="Combat",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Cmb:AddSlider({Name="Strength",Min=300,Max=10000,Default=400,Color=Color3.fromRGB(255,255,255),Increment=100,ValueName="Power",Callback=function(v)_G.strength=v end})
+Cmb:AddToggle({Name="Enable Strength",Default=false,Callback=function(v)
+    if v then
+        StrConn=workspace.ChildAdded:Connect(function(m)
+            if m.Name=="GrabParts"then
+                local g=m:FindFirstChild("GrabPart")
+                if g and g:FindFirstChild("WeldConstraint")then
+                    local p=g.WeldConstraint.Part1
+                    if p then
+                        local bv=Instance.new("BodyVelocity",p)
+                        m:GetPropertyChangedSignal("Parent"):Connect(function()
+                            if not m.Parent and UIS:GetLastInputType()==Enum.UserInputType.MouseButton2 then
+                                bv.MaxForce=Vector3.new(math.huge,math.huge,math.huge)
+                                bv.Velocity=workspace.CurrentCamera.CFrame.LookVector*_G.strength
+                                Deb:AddItem(bv,1)
+                            else bv:Destroy()end
+                        end)
+                    end
+                end
+            end
+        end)
+    elseif StrConn then StrConn:Disconnect()StrConn=nil end
+end})
+Cmb:AddSection({Name="Grab Effects"})
+Cmb:AddToggle({Name="Poison",Default=false,Callback=function(v)if v then Coroutines.poison=coroutine.create(function()GrabHandle("poison")end)coroutine.resume(Coroutines.poison)else StopCo("poison")for _,p in pairs(PoisonParts)do p.Position=Vector3.new(0,-200,0)end end end})
+Cmb:AddToggle({Name="Radioactive",Default=false,Callback=function(v)if v then Coroutines.radio=coroutine.create(function()GrabHandle("radio")end)coroutine.resume(Coroutines.radio)else StopCo("radio")for _,p in pairs(RadioParts)do p.Position=Vector3.new(0,-200,0)end end end})
+Cmb:AddToggle({Name="Fire",Default=false,Callback=function(v)if v then Coroutines.fire=coroutine.create(FireGrab)coroutine.resume(Coroutines.fire)else StopCo("fire")end end})
+Cmb:AddToggle({Name="Noclip",Default=false,Callback=function(v)if v then Coroutines.noclip=coroutine.create(NoclipGrab)coroutine.resume(Coroutines.noclip)else StopCo("noclip")end end})
+Cmb:AddToggle({Name="Kick",Default=false,Callback=function(v)if v then KickGrab()else CleanConns(KickConns)for _,p in pairs(Plrs:GetPlayers())do if p.Character and p.Character:FindFirstChild("HumanoidRootPart")then local h=p.Character.HumanoidRootPart if h:FindFirstChild("FirePlayerPart")then local f=h.FirePlayerPart f.Size=Vector3.new(2.5,5.5,2.5)f.CollisionGroup="Default"f.CanQuery=false end end end end end})
+Cmb:AddSection({Name="Mass"})
+Cmb:AddToggle({Name="Fire All",Default=false,Callback=function(v)if v then Coroutines.fireall=coroutine.create(FireAll)coroutine.resume(Coroutines.fireall)else StopCo("fireall")end end})
+
+-- Player
+local Ply=Win:MakeTab({Name="Player",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Ply:AddToggle({Name="Crouch Speed",Default=false,Callback=function(v)if v then Coroutines.cspd=coroutine.create(function()while true do pcall(function()if Char and Char:FindFirstChild("Humanoid")and Char.Humanoid.WalkSpeed==5 then Char.Humanoid.WalkSpeed=CrSpd end end)wait(0.1)end end)coroutine.resume(Coroutines.cspd)else StopCo("cspd")if Char and Char:FindFirstChild("Humanoid")then Char.Humanoid.WalkSpeed=16 end end end})
+Ply:AddSlider({Name="Speed",Min=6,Max=500,Default=50,Color=Color3.fromRGB(255,255,255),Increment=1,ValueName="",Callback=function(v)CrSpd=v end})
+Ply:AddToggle({Name="Crouch Jump",Default=false,Callback=function(v)if v then Coroutines.cjmp=coroutine.create(function()while true do pcall(function()if Char and Char:FindFirstChild("Humanoid")and Char.Humanoid.JumpPower==12 then Char.Humanoid.JumpPower=CrJmp end end)wait(0.1)end end)coroutine.resume(Coroutines.cjmp)else StopCo("cjmp")if Char and Char:FindFirstChild("Humanoid")then Char.Humanoid.JumpPower=24 end end end})
+Ply:AddSlider({Name="Power",Min=6,Max=500,Default=50,Color=Color3.fromRGB(255,255,255),Increment=1,ValueName="",Callback=function(v)CrJmp=v end})
+
+-- Object
+local Obj=Win:MakeTab({Name="Object",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Obj:AddToggle({Name="Anchor Grab",Default=false,Callback=function(v)if v then if not Coroutines.anchor or coroutine.status(Coroutines.anchor)=="dead"then Coroutines.anchor=coroutine.create(AnchorGrab)coroutine.resume(Coroutines.anchor)end else if Coroutines.anchor and coroutine.status(Coroutines.anchor)~="dead"then StopCo("anchor")end end end})
+Obj:AddButton({Name="Unanchor All",Callback=function()CleanAnchored()Orion:MakeNotification({Name="Done",Content="Unanchored",Image="rbxassetid://4483362458",Time=2})end})
+
+-- Defense
+local Def=Win:MakeTab({Name="Defense",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Def:AddToggle({Name="Anti Grab",Default=false,Callback=function(v)if v then Conns.ag=Run.Heartbeat:Connect(function()local c=LP.Character if c and c:FindFirstChild("Head")then local h=c.Head local po=h:FindFirstChild("PartOwner")if po then Str:FireServer()RS.GameCorrectionEvents.StopAllVelocity:FireServer()for _,p in pairs(c:GetChildren())do if p:IsA("BasePart")then p.Anchored=true end end while LP.IsHeld.Value do wait()end for _,p in pairs(c:GetChildren())do if p:IsA("BasePart")then p.Anchored=false end end end end end)else if Conns.ag then Conns.ag:Disconnect()Conns.ag=nil end end end})
+Def:AddToggle({Name="Anti Kick",Default=false,Callback=function(v)if v then Conns.ak=Run.Heartbeat:Connect(function()local c=LP.Character if c and c:FindFirstChild("HumanoidRootPart")then local h=c.HumanoidRootPart if h:FindFirstChild("FirePlayerPart")then local po=h.FirePlayerPart:FindFirstChild("PartOwner")if po and po.Value~=LP.Name then RS.CharacterEvents.RagdollRemote:FireServer(h,0)wait(0.1)Str:FireServer()end end end end)else if Conns.ak then Conns.ak:Disconnect()Conns.ak=nil end end end})
+Def:AddToggle({Name="Anti Explosion",Default=false,Callback=function(v)if v then if LP.Character then SetupAntiExp(LP.Character)end CharAddConn=LP.CharacterAdded:Connect(function(c)if AntiExpConn then AntiExpConn:Disconnect()end SetupAntiExp(c)end)else if AntiExpConn then AntiExpConn:Disconnect()AntiExpConn=nil end if CharAddConn then CharAddConn:Disconnect()CharAddConn=nil end end end})
+
+-- Blobman
+local Blob=Win:MakeTab({Name="Blobman",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Blob:AddToggle({Name="Mass Grab",Default=false,Callback=function(v)if v then Coroutines.blob=coroutine.create(function()local found=false for _,w in pairs(workspace:GetDescendants())do if w.Name=="CreatureBlobman"and w:FindFirstChild("VehicleSeat")and w.VehicleSeat:FindFirstChild("SeatWeld")and IsDes(w.VehicleSeat.SeatWeld.Part1,LP.Character)then Blobman=w found=true break end end if not found then Orion:MakeNotification({Name="Error",Content="Mount Blobman first!",Image="rbxassetid://4483362458",Time=3})return end while Blobman do pcall(function()for _,p in pairs(Plrs:GetPlayers())do if Blobman and p~=LP then BlobGrab(p,Blobman)wait(_G.BlobDelay)end end end)wait(0.02)end end)coroutine.resume(Coroutines.blob)else StopCo("blob")Blobman=nil end end})
+Blob:AddSlider({Name="Speed",Min=0.005,Max=1,Default=0.5,Color=Color3.fromRGB(255,255,255),Increment=0.005,ValueName="",Callback=function(v)_G.BlobDelay=v end})
+
+-- Fun
+local Fun=Win:MakeTab({Name="Fun",Icon="rbxassetid://4483345998",PremiumOnly=false})
+local CoinAmt=""
+Fun:AddTextbox({Name="Coins",Default="999999",TextDisappear=false,Callback=function(v)CoinAmt=v end})
+Fun:AddButton({Name="Set Coins",Callback=function()LP.PlayerGui.MenuGui.TopRight.CoinsFrame.CoinsDisplay.Coins.Text=CoinAmt Orion:MakeNotification({Name="Done",Content="Coins set",Image="rbxassetid://4483362458",Time=2})end})
+Fun:AddSlider({Name="Decoy Offset",Min=1,Max=50,Default=15,Color=Color3.fromRGB(255,255,255),Increment=1,ValueName="",Callback=function(v)DecOff=v end})
+Fun:AddSlider({Name="Circle Radius",Min=5,Max=50,Default=10,Color=Color3.fromRGB(255,255,255),Increment=1,ValueName="",Callback=function(v)CircRad=v end})
+Fun:AddButton({Name="Decoy Follow",Callback=function()local decs={}for _,d in pairs(workspace:GetDescendants())do if d:IsA("Model")and d.Name=="YouDecoy"then table.insert(decs,d)end end if #decs==0 then Orion:MakeNotification({Name="Error",Content="No decoys found",Image="rbxassetid://4483362458",Time=3})return end local nd,mp=#decs,math.ceil(#decs/2)local function upd()for i,d in pairs(decs)do local t=d:FindFirstChild("Torso")if t then local bp,bg=t:FindFirstChild("BodyPosition"),t:FindFirstChild("BodyGyro")if bp and bg then local tp if FollowMode then if Char and Char:FindFirstChild("HumanoidRootPart")then tp=Char.HumanoidRootPart.Position local of=(i-mp)*DecOff local fw,rt=Char.HumanoidRootPart.CFrame.LookVector,Char.HumanoidRootPart.CFrame.RightVector tp=tp-fw*DecOff+rt*of end else local np=GetNearest()if np and np.Character and np.Character:FindFirstChild("HumanoidRootPart")then local ag=math.rad((i-1)*(360/nd))tp=np.Character.HumanoidRootPart.Position+Vector3.new(math.cos(ag)*CircRad,0,math.sin(ag)*CircRad)bg.CFrame=CFrame.new(t.Position,np.Character.HumanoidRootPart.Position)end end if tp then local d=(tp-t.Position).Magnitude if d>5 then bp.Position=tp if FollowMode then bg.CFrame=CFrame.new(t.Position,tp)end else bp.Position=t.Position bg.CFrame=t.CFrame end end end end end end for _,d in pairs(decs)do local t=d:FindFirstChild("Torso")if t then local bp,bg=Instance.new("BodyPosition"),Instance.new("BodyGyro")bp.Parent=t bg.Parent=t bp.MaxForce=Vector3.new(40000,40000,40000)bp.D=100 bp.P=100 bg.MaxTorque=Vector3.new(40000,40000,40000)bg.D=100 bg.P=20000 table.insert(DecoyConns,Run.Heartbeat:Connect(upd))SNO:FireServer(t,Char.Head.CFrame)end end Orion:MakeNotification({Name="Done",Content=nd.." decoys active",Image="rbxassetid://4483362458",Time=3})end})
+Fun:AddButton({Name="Toggle Mode",Callback=function()FollowMode=not FollowMode Orion:MakeNotification({Name="Mode",Content=FollowMode and"Follow"or"Surround",Image="rbxassetid://4483362458",Time=2})end})
+Fun:AddButton({Name="Disconnect Decoys",Callback=function()CleanConns(DecoyConns)Orion:MakeNotification({Name="Done",Content="Disconnected",Image="rbxassetid://4483362458",Time=2})end})
+
+-- Settings
+local Set=Win:MakeTab({Name="Settings",Icon="rbxassetid://4483345998",PremiumOnly=false})
+Set:AddButton({Name="Destroy UI",Callback=function()Orion:Destroy()end})
+
+Orion:Init()
+Orion:MakeNotification({Name="Loaded",Content="VenomX ready! Player: "..LP.Name,Image="rbxassetid://4483362458",Time=5})
+
+-- Cleanup on script end
+game:GetService("Players").PlayerRemoving:Connect(function(p)
+    if p == LP then
+        for k,v in pairs(Coroutines) do StopCo(k) end
+        CleanConns(Conns)
+        CleanConns(AncConns)
+        CleanConns(KickConns)
+        CleanConns(DecoyConns)
+        CleanAnchored()
+    end
+end)
